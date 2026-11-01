@@ -7,12 +7,18 @@ insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'alice@a.test'),
   ('00000000-0000-0000-0000-00000000000b', 'bob@b.test');
 
--- Seed data as the server (bypasses RLS)
+-- Sign-up creates one store per organization
+do $$
+begin
+  if (select count(*) from public.stores) <> 2 then raise exception 'expected one store per new organization'; end if;
+end $$;
+
+-- Seed data as the server (bypasses RLS). Give the stores fixed ids/names for the tests below.
 set local role service_role;
-insert into public.stores (id, organization_id, name)
-  select '10000000-0000-0000-0000-00000000000a', organization_id, 'Alice store' from public.users where email = 'alice@a.test';
-insert into public.stores (id, organization_id, name)
-  select '10000000-0000-0000-0000-00000000000b', organization_id, 'Bob store' from public.users where email = 'bob@b.test';
+update public.stores set id = '10000000-0000-0000-0000-00000000000a', name = 'Alice store'
+  where organization_id = (select organization_id from public.users where email = 'alice@a.test');
+update public.stores set id = '10000000-0000-0000-0000-00000000000b', name = 'Bob store'
+  where organization_id = (select organization_id from public.users where email = 'bob@b.test');
 insert into public.products (id, organization_id, store_id, external_id, title)
   select '20000000-0000-0000-0000-00000000000b', organization_id, id, 'p1', 'Bob product' from public.stores where name = 'Bob store';
 insert into public.store_credentials (store_id, encrypted_access_token)

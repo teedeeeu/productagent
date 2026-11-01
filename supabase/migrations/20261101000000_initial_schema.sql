@@ -60,6 +60,10 @@ begin
 
   insert into public.users (id, organization_id, email, full_name)
   values (new.id, org_id, new.email, new.raw_user_meta_data ->> 'full_name');
+
+  -- Every organization starts with one store (CSV imports go here).
+  insert into public.stores (organization_id, name)
+  select org_id, name from public.organizations where id = org_id;
   return new;
 end;
 $$;

@@ -15,20 +15,48 @@ reference you entered supports it.
 |---|---|---|
 | 1 | Next.js app (TypeScript, Tailwind) | ✅ |
 | 2 | Supabase schema, indexes, row-level security | ✅ tested on PostgreSQL 16 |
-| 3 | CSV import (simple format + Shopify's own product export) | ✅ parser and validation; upload page comes with the dashboard |
+| 3 | CSV import (simple format + Shopify's own product export) | ✅ |
 | 4 | Deterministic scanner | ✅ all 4 FitnessKing cases detected |
 | 5 | LLM-assisted analysis (OpenAI, Zod-validated) | ⏳ next |
-| 6 | Dashboard (Overview, Products, Product detail, Settings) | ⏳ |
+| 6 | Dashboard (Overview, Products, Product detail, Settings), sign-in | ✅ |
 | 7 | Shopify OAuth (read-only) | ⏳ |
-| 8 | More automated tests | ongoing (42 unit tests + database security tests) |
+| 8 | More automated tests | ongoing (60 tests + database security tests) |
 | 9 | Deployment (Vercel + Supabase) | ⏳ |
 
-## Try the scanner now (no accounts or keys needed)
+## Run the dashboard locally (no accounts or keys needed)
 
 Requires Node.js 20 or newer.
 
 ```bash
 npm install
+npm run dev
+```
+
+Open http://localhost:3000. Without Supabase keys the app runs in **local demo
+mode**: there's no sign-in, and data is saved in `.data/demo-db.json` on your
+computer. Go to **Settings → Import products** and upload
+`tests/fixtures/fitnessking.csv` or `public/samples/example-products.csv`.
+
+Demo mode is switched off automatically in production. A deployed app always needs Supabase.
+
+## Connect Supabase (accounts + secure storage)
+
+1. Create a free project at [supabase.com](https://supabase.com).
+2. Open **SQL Editor** and run the contents of
+   `supabase/migrations/20261101000000_initial_schema.sql`. If you use the Supabase CLI, run `supabase db push` instead.
+3. Under **Authentication → URL Configuration**:
+   - set **Site URL** to `http://localhost:3000` (your real domain later)
+   - add `http://localhost:3000/auth/callback` to **Redirect URLs**
+4. Under **Project Settings → API**, copy the **Project URL** and the **anon / publishable key**.
+5. Copy `.env.example` to `.env.local` and fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+6. Restart `npm run dev`. You'll now see a sign-in page. Create an account and confirm it from the email.
+
+Each new account gets its own organization and store. Row-level security in the
+database stops any account from seeing another account's data.
+
+## Try the scanner from the command line
+
+```bash
 npm run scan -- tests/fixtures/fitnessking.csv
 npm run scan -- public/samples/example-products.csv
 npm run scan -- path/to/your-shopify-products-export.csv
@@ -119,7 +147,25 @@ The migration is in [`supabase/migrations/`](supabase/migrations). It creates:
 - Re-scans update existing findings instead of duplicating them, so a finding the
   merchant dismissed stays dismissed. Findings that disappear are marked `resolved`.
 
+## Dashboard
+
+| Page | What it shows |
+|---|---|
+| **Overview** | Products scanned, products with issues, open findings, findings by severity, the products to fix first, and scan history. Also has the **Run scan** button. |
+| **Products** | Searchable table with filters for severity and status, sorted so the most serious issues come first |
+| **Product detail** | Each finding with its quoted evidence, recommended action and suggested correction. You can dismiss and reopen findings. Also shows the original product data and lets you add manufacturer references. |
+| **Settings** | Store name, CSV upload, Shopify connection (coming next), and which API keys are configured (never the key values) |
+
+- **Dismissed findings stay dismissed** when you re-scan.
+- **Fixed issues are marked "resolved" automatically** on the next scan.
+- **Adding a manufacturer reference re-scans that product right away.**
+
+Code layout:
+- `src/app/`: the pages and server actions. Every action checks the user is signed in.
+- `src/lib/services/`: the import and scan workflow.
+- `src/lib/data/`: database access. `SupabaseStore` is used in production. `DemoStore` is used for local demo mode and tests.
+
 ## Configuration
 
-Copy `.env.example` to `.env.local`. Nothing in it is needed yet for the scanner or tests.
-Supabase is needed from phase 6 (dashboard), OpenAI from phase 5 (optional), and Shopify from phase 7.
+Copy `.env.example` to `.env.local`. Supabase is needed for accounts. OpenAI
+(the AI checks, coming next) and Shopify (the direct connection) are optional.

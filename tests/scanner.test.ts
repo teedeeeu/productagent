@@ -232,3 +232,31 @@ describe("severity and other rules", () => {
     expect(summary.skipped).toBe(2);
   });
 });
+
+describe("implied contradictions with manufacturer evidence", () => {
+  const base = { title: "Product X", specifications: kv("Verstelbare helling: Niet beschikbaar|Snelkeuzetoetsen helling: Ja") };
+  const incline = (p: ProductInput) => scanProduct(p).findings.filter((f) => f.attributes.includes("incline_adjustable"));
+
+  it("is verified and points at the incline controls when the manufacturer confirms no incline", () => {
+    const [f] = incline(
+      product({ ...base, manufacturerReferences: [{ key: "Verstelbare helling", value: "Nee", sourceUrl: "https://example.com/m.pdf" }] }),
+    );
+    expect(f.verificationStatus).toBe("manufacturer_verified");
+    expect(f.recommendedAction).toMatch(/Snelkeuzetoetsen helling/);
+  });
+
+  it("reports one verified finding with a correction when the manufacturer confirms incline", () => {
+    const findings = incline(
+      product({ ...base, manufacturerReferences: [{ key: "Verstelbare helling", value: "Ja", sourceUrl: "https://example.com/m.pdf" }] }),
+    );
+    expect(findings).toHaveLength(1);
+    const [f] = findings;
+    expect(f.verificationStatus).toBe("manufacturer_verified");
+    expect(f.suggestedCorrections[0]).toMatchObject({ currentValue: "Niet beschikbaar", suggestedValue: "Ja" });
+  });
+
+  it("stays 'needs verification' when the manufacturer value has no source", () => {
+    const [f] = incline(product({ ...base, manufacturerReferences: [{ key: "Verstelbare helling", value: "Nee" }] }));
+    expect(f.verificationStatus).toBe("needs_verification");
+  });
+});

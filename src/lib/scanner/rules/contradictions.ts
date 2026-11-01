@@ -222,6 +222,15 @@ export function detectImpliedContradictions(product: ProductInput, extractions: 
   );
   if (!implying.length) return [];
 
+  // A sourced manufacturer reference settles which side is right.
+  const mfr = extractions.find(
+    (e) => e.source.field === "manufacturer" && e.attribute === "incline_adjustable" && e.value.kind === "boolean" && e.hasEvidence,
+  );
+  const mfrSays = mfr && mfr.value.kind === "boolean" ? mfr.value.value : undefined;
+  // Manufacturer confirms incline exists: the direct merchant-vs-manufacturer
+  // contradiction (with a suggested correction) already covers this.
+  if (mfrSays === true) return [];
+
   const implied = implying.map((e) => `${sourcePhrase(e.source)} lists ${labelOf(e.attribute).toLowerCase()} (“${e.value.display}”)`);
   return [
     baseFinding(product, {
@@ -229,12 +238,14 @@ export function detectImpliedContradictions(product: ProductInput, extractions: 
       severity: "medium",
       attributes: ["incline_adjustable", ...new Set(implying.map((e) => e.attribute))],
       title: "Incline marked unavailable, but incline features are listed",
-      evidence: [...inclineFalse, ...implying].map(evidenceFrom),
+      evidence: [...inclineFalse, ...implying, ...(mfr ? [mfr] : [])].map(evidenceFrom),
       explanation: `${sourcePhrase(inclineFalse[0].source).replace(/^the/, "The")} says adjustable incline is not available (“${inclineFalse[0].value.display}”), but ${implied.join(" and ")}. These cannot both be true for the same product. A shopping assistant could tell a customer the treadmill has no incline when it does, or the reverse.`,
       recommendedAction:
-        "Check the manufacturer documentation to confirm whether this model has adjustable incline. Then either correct the incline field or remove the incline features that do not apply.",
-      confidence: "medium",
-      verificationStatus: "needs_verification",
+        mfrSays === false
+          ? `The manufacturer reference confirms there is no adjustable incline. Remove ${implying.map((e) => sourcePhrase(e.source)).join(" and ")} so the listing does not suggest an incline function.`
+          : "Check the manufacturer documentation to confirm whether this model has adjustable incline. Then either correct the incline field or remove the incline features that do not apply.",
+      confidence: mfrSays === undefined ? "medium" : "high",
+      verificationStatus: mfrSays === undefined ? "needs_verification" : "manufacturer_verified",
       fingerprint: fingerprint(product.externalId, "contradiction", ["incline_adjustable"], "implied"),
     }),
   ];
